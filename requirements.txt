@@ -1,0 +1,9 @@
+mss==10.1.0
+openai==1.102.0
+pillow==11.3.0
+SpeechRecognition==3.14.3
+pyttsx3==2.99
+groq==0.4.1
+opencv-python
+python-dotenv
+pyaudio==0.2.14
