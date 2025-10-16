@@ -9,6 +9,24 @@ from collections import defaultdict
 from pathlib import Path
 from config import Config, PRODUCTIVE_ACTIVITIES, UNPRODUCTIVE_ACTIVITIES
 from logger import ActivityLogger
+import json
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import tempfile
+import os
+try:
+    # Optional: matplotlib for simple charts embedded into PDF
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+except Exception:
+    plt = None
 
 
 class ActivityAggregator:
@@ -445,3 +463,417 @@ class ActivityAggregator:
             },
             "generated_at": datetime.now().isoformat()
         }
+
+    def save_weekly_report(self, week_offset: int = 0, extras: Optional[Dict] = None) -> Optional[Path]:
+        """Generate and save the weekly report JSON to logs/reports/YYYY-WNN-report.json
+
+        extras: optional dict of additional fields to include (e.g., suggestions, risk_assessment)
+        Returns the path to the saved report or None on failure.
+        """
+        try:
+            summary = self.get_weekly_summary(week_offset)
+            trends = self.get_trend_comparison()
+            insights = self.get_activity_insights()
+
+            report = {
+                "summary": summary,
+                "trends": trends,
+                "insights": insights,
+                "generated_at": datetime.now().isoformat()
+            }
+
+            if extras:
+                report.update(extras)
+
+            # Ensure reports directory exists under logs
+            reports_dir = Path(self.logger.logs_dir) / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+
+            # Determine filename from summary
+            year = summary.get('year', datetime.now().year)
+            week_num = summary.get('week_number', datetime.now().isocalendar()[1])
+            filename = f"{year}-W{int(week_num):02d}-report.json"
+            file_path = reports_dir / filename
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2)
+
+            return file_path
+        except Exception as e:
+            print(f"Failed to save weekly report: {e}")
+            return None
+
+    def save_daily_report(self, date: Optional[datetime] = None, extras: Optional[Dict] = None) -> Optional[Path]:
+        """Generate and save a daily report JSON file to logs/reports/YYYY-MM-DD-daily.json"""
+        try:
+            summary = self.get_daily_summary(date)
+
+            report = {
+                "daily_summary": summary,
+                "generated_at": datetime.now().isoformat()
+            }
+
+            if extras:
+                report.update(extras)
+
+            reports_dir = Path(self.logger.logs_dir) / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+
+            filename = f"{summary['date']}-daily-report.json"
+            file_path = reports_dir / filename
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2)
+
+            return file_path
+        except Exception as e:
+            print(f"Failed to save daily report: {e}")
+            return None
+
+    def save_weekly_report_pdf(self, week_offset: int = 0, output_path: Optional[Path] = None, extras: Optional[Dict] = None) -> Optional[Path]:
+        """Generate a human-friendly PDF report for the requested week.
+
+        Returns the path to the saved PDF or None on failure.
+        """
+        try:
+            summary = self.get_weekly_summary(week_offset)
+            trends = self.get_trend_comparison()
+            insights = self.get_activity_insights()
+
+            report = {
+                "summary": summary,
+                "trends": trends,
+                "insights": insights,
+                "generated_at": datetime.now().isoformat()
+            }
+
+            if extras:
+                report.update(extras)
+
+            # Prepare output path
+            reports_dir = Path(self.logger.logs_dir) / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+
+            year = summary.get('year', datetime.now().year)
+            week_num = summary.get('week_number', datetime.now().isocalendar()[1])
+            pdf_name = f"{year}-W{int(week_num):02d}-report.pdf"
+            file_path = Path(output_path) if output_path else (reports_dir / pdf_name)
+
+            # Build PDF using ReportLab
+            doc = SimpleDocTemplate(str(file_path), pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+            styles = getSampleStyleSheet()
+            story = []
+
+            title = f"Activity Monitor — Weekly Report: {summary['week_start']} to {summary['week_end']}"
+
+            # Apply theme color if provided
+            theme_color = None
+            try:
+                if getattr(self.config, 'report_theme_color', None):
+                    theme_color = colors.HexColor(self.config.report_theme_color)
+                    styles['Heading2'].textColor = theme_color
+                    styles['Heading3'].textColor = theme_color
+            except Exception:
+                theme_color = None
+
+            # Register custom font if provided via config (TTF path)
+            custom_font = getattr(self.config, 'report_font', None)
+            registered_font_name = None
+            if custom_font:
+                try:
+                    font_path = os.path.expanduser(str(custom_font))
+                    if os.path.exists(font_path) and font_path.lower().endswith('.ttf'):
+                        # Use filename (without extension) as the font name
+                        fname = os.path.splitext(os.path.basename(font_path))[0]
+                        pdfmetrics.registerFont(TTFont(fname, font_path))
+                        registered_font_name = fname
+                        # Apply to title style if possible
+                        styles['Title'].fontName = registered_font_name
+                        styles['Heading2'].fontName = registered_font_name
+                        styles['Heading3'].fontName = registered_font_name
+                except Exception:
+                    # Non-fatal — keep defaults
+                    registered_font_name = None
+
+            # If a logo path is configured and exists, place it in a small header next to the title
+            logo_path = getattr(self.config, 'report_logo_path', None)
+            if logo_path:
+                try:
+                    logo_file = Path(logo_path)
+                    if logo_file.exists():
+                        logo_img = Image(str(logo_file), width=0.9 * inch, height=0.9 * inch)
+                        title_para = Paragraph(title, styles['Title'])
+                        header_table = Table([[logo_img, title_para]], colWidths=[0.9 * inch, None])
+                        header_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+                        story.append(header_table)
+                    else:
+                        story.append(Paragraph(title, styles['Title']))
+                except Exception:
+                    story.append(Paragraph(title, styles['Title']))
+            else:
+                story.append(Paragraph(title, styles['Title']))
+            story.append(Spacer(1, 12))
+
+            meta = f"Generated: {report['generated_at']}"
+            story.append(Paragraph(meta, styles['Normal']))
+            story.append(Spacer(1, 12))
+
+            # Summary table
+            story.append(Paragraph("Summary", styles['Heading2']))
+            summary_data = [
+                ["Total Present Hours", summary.get('total_present_hours', 0)],
+                ["Productive Hours", summary.get('productive_hours', 0)],
+                ["Unproductive Hours", summary.get('unproductive_hours', 0)],
+                ["Productive Percentage", f"{summary.get('productive_percentage', 0)}%"],
+                ["Total Events", summary.get('total_events', 0)]
+            ]
+            table = Table(summary_data, hAlign='LEFT')
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 12))
+
+            # Time breakdown table
+            story.append(Paragraph("Time Breakdown (hours)", styles['Heading2']))
+            breakdown = summary.get('time_breakdown_hours', {})
+            breakdown_rows = [["Activity", "Hours"]] + [[k, v] for k, v in breakdown.items()]
+            table = Table(breakdown_rows, hAlign='LEFT')
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 12))
+
+            # Daily breakdown section
+            story.append(Paragraph("Daily Breakdown", styles['Heading2']))
+            daily = summary.get('daily_breakdown', {})
+            for date_str, activities in daily.items():
+                story.append(Paragraph(f"{date_str}", styles['Heading3']))
+                rows = [["Activity", "Hours"]] + [[a, hours] for a, hours in activities.items()]
+                t = Table(rows, hAlign='LEFT')
+                t.setStyle(TableStyle([
+                    ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+                ]))
+                story.append(t)
+                story.append(Spacer(1, 8))
+
+            # Insights
+            story.append(Paragraph("Insights & Recommendations", styles['Heading2']))
+            insights_text = insights.get('insights', [])
+            warnings = insights.get('warnings', [])
+            recs = insights.get('recommendations', [])
+
+            if insights_text:
+                for it in insights_text:
+                    story.append(Paragraph(it, styles['Normal']))
+            if warnings:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph("Warnings:", styles['Heading3']))
+                for w in warnings:
+                    story.append(Paragraph(w, styles['Normal']))
+            if recs:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph("Recommendations:", styles['Heading3']))
+                for r in recs:
+                    story.append(Paragraph(r, styles['Normal']))
+
+            # Snapshots section: embed up to 6 images from the snapshots weekly folder
+            try:
+                snapshots_dir = Path(self.logger.logs_dir) / "snapshots" / f"{year}-W{int(week_num):02d}"
+                if snapshots_dir.exists() and snapshots_dir.is_dir():
+                    images = sorted(
+                        [p for p in snapshots_dir.iterdir() if p.suffix.lower() in ('.jpg', '.jpeg', '.png')],
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True
+                    )
+
+                    max_images = 6
+                    selected = images[:max_images]
+                    if selected:
+                        story.append(PageBreak())
+                        story.append(Paragraph('Snapshots', styles['Heading2']))
+                        story.append(Spacer(1, 6))
+
+                        # Arrange images into a simple grid (3 columns)
+                        cols = 3
+                        rows = []
+                        row = []
+                        for idx, img_path in enumerate(selected):
+                            try:
+                                im = Image(str(img_path), width=2.0 * inch, height=1.5 * inch)
+                                row.append(im)
+                                if len(row) == cols:
+                                    rows.append(row)
+                                    row = []
+                            except Exception:
+                                # skip images that fail to load
+                                continue
+
+                        if row:
+                            # fill remaining columns with empty cells
+                            while len(row) < cols:
+                                row.append(Paragraph('', styles['Normal']))
+                            rows.append(row)
+
+                        # Add the image grid
+                        for r in rows:
+                            t = Table([r], hAlign='LEFT')
+                            t.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.25, colors.white)]))
+                            story.append(t)
+                            story.append(Spacer(1, 6))
+            except Exception:
+                # don't fail the whole report if embedding snapshots fails
+                pass
+
+            # Per-person timelines: collect per-person events from the week's log and render small timelines
+            try:
+                # Read events for the week
+                log_file = self.logger.get_log_file_for_week(year, int(week_num))
+                if log_file and log_file.exists():
+                    events = self.logger.read_events(file_path=log_file)
+                    # Extract per-person activities
+                    person_timelines = {}  # key -> list of (timestamp, activity, confidence, snapshot)
+                    for ev in events:
+                        timestamp = ev.get('timestamp')
+                        per_person = None
+                        # support both nested detection_details and top-level per_person
+                        if ev.get('per_person'):
+                            per_person = ev.get('per_person')
+                        else:
+                            det = ev.get('detection_details', {})
+                            per_person = det.get('per_person_activities')
+
+                        if not per_person:
+                            continue
+
+                        for idx, p in enumerate(per_person):
+                            # Prefer persistent person_id if available
+                            pid = p.get('person_id') or p.get('id') or None
+                            if pid is not None:
+                                key = f"Person {pid}"
+                            else:
+                                # fallback to positional index grouping
+                                key = f"Person {idx + 1}"
+
+                            entry = (timestamp, p.get('activity', 'unknown'), p.get('confidence', 0.0), p.get('snapshot'))
+                            person_timelines.setdefault(key, []).append(entry)
+
+                    if person_timelines:
+                        story.append(PageBreak())
+                        story.append(Paragraph('Per-Person Timelines', styles['Heading2']))
+                        story.append(Spacer(1, 12))
+
+                        # For each person, render up to 6 timeline entries with small thumbnail and caption
+                        for person_key, entries in person_timelines.items():
+                            story.append(Paragraph(person_key, styles['Heading3']))
+                            story.append(Spacer(1, 6))
+                            
+                            # Sort entries by timestamp desc and take latest 6
+                            entries_sorted = sorted(entries, key=lambda x: x[0] if x[0] else '', reverse=True)[:6]
+                            
+                            # Create 3-column grid of snapshots
+                            table_data = []
+                            row = []
+                            
+                            for i, (ts, act, conf, snap) in enumerate(entries_sorted):
+                                # Create cell content
+                                cell_content = []
+                                
+                                # Add image if snapshot exists
+                                if snap and snap.strip():
+                                    try:
+                                        # Fix path resolution - don't double up logs directory
+                                        if os.path.isabs(snap):
+                                            snap_path = Path(snap)
+                                        elif snap.startswith('logs'):
+                                            # Path already includes logs directory
+                                            snap_path = Path(snap)
+                                        else:
+                                            # Path needs logs directory prepended
+                                            snap_path = Path(self.logger.logs_dir) / snap
+                                        
+                                        if snap_path.exists():
+                                            img = Image(str(snap_path), width=1.6 * inch, height=1.2 * inch)
+                                            cell_content.append(img)
+                                        else:
+                                            # Placeholder for missing image
+                                            cell_content.append(Paragraph('[Image not found]', styles['Normal']))
+                                    except Exception as e:
+                                        cell_content.append(Paragraph('[Image error]', styles['Normal']))
+                                else:
+                                    # Placeholder for no snapshot
+                                    cell_content.append(Paragraph('[No snapshot]', styles['Normal']))
+                                
+                                # Format timestamp (show only time part)
+                                try:
+                                    if ts:
+                                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                                        time_str = dt.strftime('%H:%M:%S')
+                                    else:
+                                        time_str = 'Unknown time'
+                                except Exception:
+                                    time_str = 'Invalid time'
+                                
+                                # Create caption with time and activity
+                                caption_text = f"<b>{time_str}</b><br/>{act} ({conf:.2f})"
+                                caption = Paragraph(caption_text, styles['Normal'])
+                                cell_content.append(caption)
+                                
+                                # Create a mini table for this cell (image above caption)
+                                mini_table = Table(
+                                    [[cell_content[0]], [cell_content[1]]], 
+                                    colWidths=[1.6 * inch],
+                                    rowHeights=[1.2 * inch, 0.6 * inch]
+                                )
+                                mini_table.setStyle(TableStyle([
+                                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                    ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                                    ('VALIGN', (0, 1), (0, 1), 'TOP'),
+                                    ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                                    ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                                ]))
+                                
+                                row.append(mini_table)
+                                
+                                # If we have 3 columns, add to table_data and start new row
+                                if len(row) == 3:
+                                    table_data.append(row)
+                                    row = []
+                            
+                            # Add remaining items in the last row (pad with empty cells)
+                            if row:
+                                while len(row) < 3:
+                                    row.append(Paragraph('', styles['Normal']))
+                                table_data.append(row)
+                            
+                            # Create and add the main table
+                            if table_data:
+                                main_table = Table(table_data, colWidths=[1.8 * inch, 1.8 * inch, 1.8 * inch])
+                                main_table.setStyle(TableStyle([
+                                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                                ]))
+                                story.append(main_table)
+                                story.append(Spacer(1, 12))
+            except Exception as e:
+                # Non-fatal
+                pass
+            except Exception:
+                # Non-fatal
+                pass
+
+            doc.build(story)
+
+            return file_path
+        except Exception as e:
+            print(f"Failed to save weekly PDF report: {e}")
+            return None

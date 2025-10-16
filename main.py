@@ -37,6 +37,7 @@ class ActivityCapture:
         self.logger = logger
         self.detector = detector
         self.session_tracker = session_tracker
+        self.debug = getattr(config, 'debug_detections', False)
         
         self.running = False
         self.paused = False
@@ -51,7 +52,7 @@ class ActivityCapture:
     def start(self) -> None:
         """Start capturing from webcam"""
         self.running = True
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(self.config.camera_index)
         
         if not cap.isOpened():
             print("❌ Cannot open webcam")
@@ -107,12 +108,43 @@ class ActivityCapture:
         # Run detection
         result = self.detector.detect_activity(frame)
         self.last_detection_result = result
-        
+
+        # Always print detected objects for debugging
+        print(f"Detected objects: {[obj.get('label', '') for obj in result.objects]}")
+
+        # If raw overlay mode enabled, bypass classifier and use raw detections
+        if getattr(self.config, 'raw_overlay', False):
+            labels = [obj.get('label', '') for obj in result.objects]
+            label_str = ','.join(labels) if labels else result.activity
+            min_log = getattr(self.config.detection, 'min_log_duration', 2)
+            if label_str != self.current_activity:
+                if self.current_activity and self.activity_start_time:
+                    duration = int(time.time() - self.activity_start_time)
+                    if duration >= min_log:
+                        try:
+                            _, imgbuf = cv2.imencode('.jpg', frame)
+                            snapshot_bytes = imgbuf.tobytes()
+                        except Exception:
+                            snapshot_bytes = None
+                        self.logger.log_activity(
+                            activity=self.current_activity,
+                            confidence=result.confidence,
+                            duration=duration,
+                            objects=result.objects,
+                            head_pose=result.head_pose,
+                            per_person=result.per_person_activities,
+                            frame=snapshot_bytes
+                        )
+                self.current_activity = label_str
+                self.activity_start_time = time.time()
+                self.session_tracker.start_activity(label_str)
+            return
+
         # Check for activity change
         if result.activity != self.current_activity:
-            self._handle_activity_change(result)
+            self._handle_activity_change(result, frame)
     
-    def _handle_activity_change(self, result) -> None:
+    def _handle_activity_change(self, result, frame) -> None:
         """Handle when activity changes"""
         # End previous activity
         if self.current_activity and self.activity_start_time:
@@ -120,12 +152,20 @@ class ActivityCapture:
             
             # Only log if duration is meaningful (> 5 seconds)
             if duration >= 5:
+                try:
+                    _, imgbuf = cv2.imencode('.jpg', frame)
+                    snapshot_bytes = imgbuf.tobytes()
+                except Exception:
+                    snapshot_bytes = None
+
                 self.logger.log_activity(
                     activity=self.current_activity,
                     confidence=result.confidence,
                     duration=duration,
                     objects=result.objects,
-                    head_pose=result.head_pose
+                    head_pose=result.head_pose,
+                    per_person=result.per_person_activities,
+                    frame=snapshot_bytes
                 )
                 
                 # Update session tracker
@@ -142,18 +182,30 @@ class ActivityCapture:
         """Prepare frame for display with overlays"""
         if self.last_detection_result:
             frame = self.detector.draw_detection(frame, self.last_detection_result)
-        
+            # Draw all detected objects and their labels (extra overlay)
+            for obj in self.last_detection_result.objects:
+                bbox = obj['bbox']
+                x, y, w, h = bbox
+                label = obj.get('label', '')
+                score = obj.get('score', 0.0)
+                color = (255, 0, 255)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+                label_text = f"{label} {score:.2f}"
+                (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(frame, (x, max(0, y - th - 8)), (x + tw + 6, y), (0, 0, 0), -1)
+                cv2.putText(frame, label_text, (x + 3, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
         # Add pause indicator
         if self.paused:
             cv2.putText(frame, "PAUSED", (10, frame.shape[0] - 20),
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-        
+
         # Add session info
         session_duration = int(time.time() - self.session_tracker.session_start_time.timestamp())
         session_text = f"Session: {session_duration // 60}m"
         cv2.putText(frame, session_text, (frame.shape[1] - 150, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        
+
         return frame
     
     def _show_session_summary(self) -> None:
@@ -175,12 +227,15 @@ class ActivityCapture:
         if self.current_activity and self.activity_start_time:
             duration = int(time.time() - self.activity_start_time)
             if duration >= 5:
+                # last-resort snapshot not available here
                 self.logger.log_activity(
                     activity=self.current_activity,
                     confidence=0.8,
                     duration=duration,
                     objects=[],
-                    head_pose=None
+                    head_pose=None,
+                    per_person=None,
+                    frame=None
                 )
         
         cap.release()
@@ -260,6 +315,18 @@ class ReportScheduler:
         
         print(f"✓ Report generated and sent")
         print(f"  Channels: {', '.join(results['channels'].keys())}")
+
+        # Save JSON report to logs/reports
+        try:
+            extras = {
+                'suggestions': suggestions,
+                'risk_assessment': risk_assessment,
+            }
+            saved = self.aggregator.save_weekly_report(extras=extras)
+            if saved:
+                print(f"✓ Report saved to: {saved}")
+        except Exception as e:
+            print(f"Failed to save report JSON: {e}")
         print("="*60 + "\n")
 
 

@@ -32,9 +32,10 @@ class DetectionModel(Enum):
 class DetectionConfig:
     """Detection and recognition thresholds"""
     model: DetectionModel = DetectionModel.MOCK
-    min_confidence: float = 0.6
-    temporal_smoothing_frames: int = 10
-    frame_skip: int = 30  # Process every Nth frame
+    min_confidence: float = 0.5
+    temporal_smoothing_frames: int = 5
+    # Process every Nth frame. Lower = more responsive but higher CPU usage.
+    frame_skip: int = 3  # balanced responsiveness
     
     # Activity-specific thresholds
     phone_detection_threshold: float = 0.7
@@ -42,6 +43,9 @@ class DetectionConfig:
     tv_view_duration_sec: int = 30
     laptop_work_duration_sec: int = 30
     absent_duration_sec: int = 60
+
+    # Minimum seconds before logging an activity (can be lowered for faster switching)
+    min_log_duration: int = 5
     
     # Head pose thresholds for activity classification
     phone_pitch_min: float = -45.0  # Looking down
@@ -109,6 +113,18 @@ class Config:
     show_camera_feed: bool = True
     display_width: int = 640
     display_height: int = 480
+    # Camera index (default 0)
+    camera_index: int = 0
+    # Allow overriding YOLO model name
+    yolo_model: str = "yolov8n"
+    # Debug toggle to print detections each frame
+    debug_detections: bool = False
+    # Raw overlay mode: show raw detected objects on screen and bypass activity classifier
+    raw_overlay: bool = False
+    # Report customization
+    report_logo_path: Optional[str] = None
+    report_theme_color: Optional[str] = None  # hex color e.g. '#2B8CFF'
+    report_font: Optional[str] = None
     
     @classmethod
     def from_env(cls) -> 'Config':
@@ -130,12 +146,40 @@ class Config:
             config.detection.model = DetectionModel[model_name]
         except KeyError:
             config.detection.model = DetectionModel.MOCK
-        
+
+        # Camera index
+        try:
+            config.camera_index = int(os.getenv('CAMERA_INDEX', '0'))
+        except Exception:
+            config.camera_index = 0
+
+        # Allow overriding min confidence via env
+        try:
+            conf_env = os.getenv('DETECTION_MIN_CONF')
+            if conf_env is not None:
+                config.detection.min_confidence = float(conf_env)
+        except Exception:
+            pass
+
+        # YOLO model override
+        config.yolo_model = os.getenv('YOLO_MODEL', config.yolo_model)
+
+        # Debug toggle
+        config.debug_detections = os.getenv('DEBUG_DETECTIONS', '0') in ('1', 'true', 'True')
+
+        # Raw overlay toggle
+        config.raw_overlay = os.getenv('RAW_OVERLAY', '0') in ('1', 'true', 'True')
+
         # Logging directory
         logs_dir = os.getenv("LOGS_DIR", "logs")
         config.logging.logs_dir = logs_dir
         Path(logs_dir).mkdir(exist_ok=True)
-        
+
+        # Report customization from env
+        config.report_logo_path = os.getenv('REPORT_LOGO') or None
+        config.report_theme_color = os.getenv('REPORT_THEME_COLOR') or None
+        config.report_font = os.getenv('REPORT_FONT') or None
+
         return config
     
     def validate(self) -> tuple[bool, list[str]]:

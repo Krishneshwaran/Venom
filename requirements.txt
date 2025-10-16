@@ -10,12 +10,19 @@ APScheduler==3.11.0
 
 # Optional: Real detection models (uncomment if using)
 # mediapipe==0.10.14
+# Ultralytics YOLO (optional - requires appropriate Python and torch)
+# ultralytics==8.3.215
 
 # Optional: Desktop notifications (Windows)
 # plyer==2.1.0
 
 # Optional: Better desktop notifications (cross-platform)
 # notify-py==0.3.43
+
+# PDF generation
+reportlab==4.0.0
+Pillow==10.1.1
+matplotlib==3.9.3
 
 # Development dependencies (optional)
 # pytest==8.3.4

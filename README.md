@@ -1,4 +1,4 @@
-# Activity Monitor
+ # Activity Monitor
 
 A comprehensive activity tracking system that monitors your computer usage through webcam, classifies activities using AI, and generates weekly reports with personalized productivity insights.
 
@@ -125,6 +125,31 @@ python main.py --test-email
 ```bash
 python main.py --no-camera
 ```
+
+### Use real object detection (YOLO)
+
+If you want the activity cam to actually recognize people and objects in real-time (instead of the mock detector), enable the YOLO detector. The project supports using Ultralytics' YOLO (yolov8). This will give much better and faster object/person recognition.
+
+1. Install ultralytics (and a compatible Python):
+
+```powershell
+py -m pip install --upgrade pip
+py -m pip install ultralytics
+```
+
+2. Set the detection model and run (uses the default `yolov8n` model which is small and fast):
+
+```powershell
+# Run once with env var set for the session
+$env:DETECTION_MODEL = 'yolo'; py main.py
+
+# Or copy into .env (use .env.example as a template) and run normally
+```
+
+Notes:
+- The first run may download model weights (yolov8n) and will require internet access.
+- If `ultralytics` isn't installed or the weights fail to load, the app will fall back to the mock detector and print a message.
+- For best performance, use Python 3.10/3.11 and make sure `numpy` & `opencv-python` are installed with matching wheels for your Python version.
 
 ## 📁 Project Structure
 
