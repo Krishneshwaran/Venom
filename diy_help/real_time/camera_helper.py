@@ -15,6 +15,7 @@ import requests
 import json  # Import json for handling JSON data
 from openai import OpenAI
 from google import genai
+from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,6 +49,39 @@ shutdown_flag = False
 
 # Global flag for processing state
 processing_flag = False
+
+# Global flag for voice activation
+is_listening_active = False
+activation_time = 0
+
+# Conversation history file
+CONVERSATION_FILE = "conversation_history.json"
+
+def save_conversation(question, response):
+    """Save question and response to JSON file."""
+    try:
+        # Load existing conversations
+        if os.path.exists(CONVERSATION_FILE):
+            with open(CONVERSATION_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+        else:
+            conversations = []
+        
+        # Add new conversation
+        conversation_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "question": question,
+            "response": response
+        }
+        conversations.append(conversation_entry)
+        
+        # Save back to file
+        with open(CONVERSATION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(conversations, f, indent=2, ensure_ascii=False)
+        
+        print(f"💾 Conversation saved to {CONVERSATION_FILE}")
+    except Exception as e:
+        print(f"❌ Error saving conversation: {e}")
 
 def encode_image(image):
     """Encode PIL Image to base64 string, ensuring under 4MB limit."""
@@ -118,7 +152,7 @@ def speak(text, save_audio=False):
 
 def voice_listener(voice_queue):
     """Background thread for continuous voice listening."""
-    global processing_flag  # Access global processing flag
+    global processing_flag, is_listening_active, activation_time  # Access global flags
     
     mic_list = sr.Microphone.list_microphone_names()
     print(f"Available microphones: {mic_list}")
@@ -150,14 +184,33 @@ def voice_listener(voice_queue):
                     if processing_flag:
                         time.sleep(0.1)  # Skip listening when processing
                         continue
+                    
+                    # Check if 10 seconds have passed since activation
+                    if is_listening_active and time.time() - activation_time > 10:
+                        is_listening_active = False
+                        print("⏰ Listening window closed. Say 'hey venom' to activate again.")
+                    
                     try:
-                        print("🎤 Listening for voice command...")
+                        print("🎤 Listening..." if is_listening_active else "💤 Waiting for 'hey venom'...")
                         # Listen for longer to capture complete sentences
                         audio = recognizer.listen(source, timeout=1, phrase_time_limit=10)
                         print("🔊 Audio captured, recognizing...")
                         text = recognizer.recognize_google(audio)
                         print(f"✅ Recognized: '{text}'")
-                        if len(text.split()) > 0 and not processing_flag:  # Check processing_flag again
+                        
+                        text_lower = text.lower()
+                        
+                        # Check for activation phrase
+                        if "hey venom" in text_lower or "hi venom" in text_lower:
+                            is_listening_active = True
+                            activation_time = time.time()
+                            print("🟢 Venom activated! Listening for your command...")
+                            # Don't queue the activation phrase itself
+                            time.sleep(0.5)
+                            continue
+                        
+                        # Only queue commands if listening is active
+                        if is_listening_active and len(text.split()) > 0 and not processing_flag:
                             print(f"Voice: {text}")
                             voice_queue.put(text)
                             print(f"📤 Command queued: '{text}'")
@@ -166,7 +219,8 @@ def voice_listener(voice_queue):
                     except sr.WaitTimeoutError:
                         continue
                     except sr.UnknownValueError:
-                        print("❌ Could not understand audio")
+                        if is_listening_active:
+                            print("❌ Could not understand audio")
                         continue
                     except sr.RequestError as e:
                         print(f"❌ Google API error: {e}")
@@ -222,10 +276,10 @@ def is_command(text):
 
 def main():
     """Main loop for DIY help system with continuous camera feed."""
-    global processing_flag  # Access global processing flag
+    global processing_flag, is_listening_active, activation_time  # Access global flags
     
     print("DIY Camera Helper started. Your personal AI vision assistant.")
-    speak("Hey! I'm your AI assistant. Just ask me anything about what I see.")
+    speak("Hey! I'm Venom, your AI assistant. Say 'hey venom' whenever you need me!")
 
     # Try to initialize camera
     cap = cv2.VideoCapture(0)
@@ -259,7 +313,7 @@ def main():
     current_frame = None
     camera_error_count = 0
     processing_command = False  # Flag to indicate when processing a command
-    last_process_time = 0  # For real-time processing
+    # Removed real-time processing variables
 
     while True:
         if camera_available and cap is not None:
@@ -274,34 +328,9 @@ def main():
                     cv2.putText(frame, "Voice listening paused", (10, 60), 
                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 
-                cv2.imshow('Camera Feed - Say "help me" for AI assistance', frame)
+                cv2.imshow('Camera Feed - Say "hey venom" to activate', frame)
                 current_frame = frame
-                
-                # Real-time processing every 15 seconds
-                if not processing_command and not processing_flag and time.time() - last_process_time > 15:
-                    print("🔄 Starting real-time analysis...")
-                    processing_command = True
-                    processing_flag = True
-                    
-                    # Process the frame
-                    frame_rgb = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
-                    img = Image.fromarray(frame_rgb)
-                    img.save(f"images/real_time_{int(time.time())}.png")
-                    img = img.resize((256, 256))
-                    img_b64 = encode_image(img)
-                    
-                    real_time_query = "Describe what you see in 2-3 short sentences, as if casually chatting with a friend."
-                    answer = ask_ai(img_b64, real_time_query)
-                    answer = answer.strip().replace('\n', ' ').replace('  ', ' ')
-                    print(f"🤖 Real-time AI RESPONSE: {answer}")
-                    
-                    # Speak the response
-                    speak(answer)
-                    
-                    processing_command = False
-                    processing_flag = False
-                    last_process_time = time.time()
-                    print("✅ Real-time analysis complete.")
+                # Removed automatic real-time processing
             else:
                 camera_error_count += 1
                 print(f"⚠️ Camera frame grab failed ({camera_error_count}/5)")
@@ -349,7 +378,7 @@ def main():
                     except Exception as e:
                         print(f"Base64 decode failed: {e}")
                         return f"Image encoding error: {e}"
-                    print("📤 Image encoded, sending to Claude 3.5 Haiku...")
+                    print("📤 Image encoded, sending to Gemini...")
                     
                     # Get AI response
                     answer = ask_ai(img_b64, text)
@@ -358,17 +387,27 @@ def main():
                     answer = answer.replace('\n', ' ').replace('  ', ' ')
                     print(f"🤖 AI RESPONSE: {answer}")
                     
+                    # Save conversation to JSON
+                    save_conversation(text, answer)
+                    
                     # Speak the response
                     speak(answer)
                     
+                    # Reset activation after response
+                    is_listening_active = True
+                    activation_time = time.time()
+                    
                     processing_command = False  # Reset processing flag
                     processing_flag = False  # Reset global processing flag
-                    print("✅ Ready for next command. Say 'help me' or ask a question.")
+                    print("✅ Ready for next command within 10 seconds, or say 'hey venom' again.")
                 else:
                     # Text-only response
                     print("📝 Processing text-only query...")
                     answer = f"I heard: '{text}'. Since camera is not available, I can help with general advice. Please describe what you need help with in more detail."
                     print(f"🤖 AI RESPONSE: {answer}")
+                    
+                    # Save conversation to JSON
+                    save_conversation(text, answer)
                     
                     # Speak the response
                     speak(answer)
