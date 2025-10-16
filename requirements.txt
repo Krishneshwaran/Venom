@@ -7,3 +7,4 @@ groq==0.4.1
 opencv-python
 python-dotenv
 pyaudio==0.2.14
+requests

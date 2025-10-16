@@ -13,6 +13,8 @@ import io
 import sys
 import requests
 import json  # Import json for handling JSON data
+from openai import OpenAI
+from google import genai
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,16 +22,32 @@ load_dotenv()
 # Set API keys
 groq_api_key = os.getenv('GROQ_API_KEY', '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')
 openrouter_api_key = os.getenv('OPENROUTER_API_KEY', 'sk-or-v1-44a810c5dfef0a41eb42f63ace8b04a745f05dccbca00feab2ae47ed63c5b23')
+google_api_key = os.getenv('GOOGLE_API_KEY', '')
+
+print(f"Loaded OpenRouter API key: {openrouter_api_key[:20]}...")
+print(f"Loaded Google API key: {google_api_key[:20]}...")
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
 engine.setProperty('rate', 150)  # Adjust speech rate
+engine.setProperty('volume', 1.0)  # Set volume to maximum
+
+# Test if TTS is working
+print("Testing text-to-speech engine...")
+voices = engine.getProperty('voices')
+if voices:
+    # Use first available voice
+    engine.setProperty('voice', voices[0].id)
+    print(f"Using voice: {voices[0].name}")
 
 # Initialize speech recognizer
 recognizer = sr.Recognizer()
 
 # Global flag for graceful shutdown
 shutdown_flag = False
+
+# Global flag for processing state
+processing_flag = False
 
 def encode_image(image):
     """Encode PIL Image to base64 string, ensuring under 4MB limit."""
@@ -44,106 +62,79 @@ def encode_image(image):
     return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 def ask_ai(image_base64, query):
-    """Send image and query to Claude 3.5 Haiku model using direct API call."""
+    """Send image and query to Google Gemini 2.5 Flash model."""
     print("=" * 50)
-    print("SENDING TO OPENROUTER API WITH CLAUDE 3.5 SONNET...")
+    print("SENDING TO GOOGLE GEMINI API...")
     print(f"Query: {query}")
     print("=" * 50)
     
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {openrouter_api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    # Claude vision format for OpenRouter
-    data = {
-        "model": "anthropic/claude-3.5-sonnet",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"Look at this image from my camera. {query}. Please analyze what's visible and provide helpful, specific advice. Format your response to be natural and conversational, as if speaking to someone - keep it concise but informative."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{image_base64}"
-                        }
-                    }
-                ]
-            }
-        ],
-        "max_tokens": 300
-    }
-    
-    # Debug output to verify payload structure
-    print(f"Payload content types: {[item.get('type') for item in data['messages'][0]['content']]}")
-    print(f"Image URL preview: {data['messages'][0]['content'][1]['image_url']['url'][:50]}...")
-    
     try:
         print(f"Sending request with image size: {len(image_base64)} characters")
-        response = requests.post(url, headers=headers, json=data)
-        print(f"Response status: {response.status_code}")
-        print(f"Response headers: {dict(response.headers)}")
         
-        if response.status_code != 200:
-            print(f"Error response: {response.text}")
-            return f"API Error: {response.status_code} - {response.text}"
-            
-        result = response.json()
+        # Decode base64 to bytes for PIL
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_data))
+        
+        client = genai.Client(api_key=google_api_key)
+        
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                f"{query}. Keep your response short, natural, and conversational - like talking to a friend. Maximum 2-3 sentences.",
+                image
+            ]
+        )
+        
         print("API response received")
-        print(f"Full response: {json.dumps(result, indent=2)}")
-        return result['choices'][0]['message']['content']
+        return response.text
     except Exception as e:
         print(f"API Error: {e}")
         return f"Error getting AI response: {str(e)}"
 
 def speak(text, save_audio=False):
-    """Convert text to speech and optionally save as audio file."""
+    """Convert text to speech without saving audio file."""
     try:
-        if save_audio:
-            # Save to audio file
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            audio_filename = f"audio_responses/response_{timestamp}.wav"
-            
-            # Create audio directory if it doesn't exist
-            os.makedirs("audio_responses", exist_ok=True)
-            
-            # Save audio file
-            engine.save_to_file(text, audio_filename)
-            engine.runAndWait()
-            
-            print(f"🔊 Audio saved: {audio_filename}")
-        else:
-            # Just speak without saving
-            engine.say(text)
-            engine.runAndWait()
+        print(f"🔊 Speaking: {text[:50]}...")
+        
+        # Use macOS native 'say' command which is more reliable
+        import subprocess
+        # Escape quotes in text
+        text_escaped = text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
+        subprocess.run(['say', text_escaped], check=True)
+        
+        print("✅ Audio playback complete")
     except Exception as e:
-        print(f"Speech error: {e}")
-        # Fallback
-        engine.say(text)
-        engine.runAndWait()
+        print(f"❌ Speech error: {e}")
+        # Fallback to pyttsx3
+        try:
+            speech_engine = pyttsx3.init()
+            speech_engine.setProperty('rate', 150)
+            speech_engine.setProperty('volume', 1.0)
+            speech_engine.say(text)
+            speech_engine.runAndWait()
+            speech_engine.stop()
+        except:
+            print("Failed to speak text")
 
 def voice_listener(voice_queue):
     """Background thread for continuous voice listening."""
+    global processing_flag  # Access global processing flag
+    
     mic_list = sr.Microphone.list_microphone_names()
     print(f"Available microphones: {mic_list}")
     
     # Try to find the best microphone
     mic_index = None
     for i, mic_name in enumerate(mic_list):
-        if "microphone" in mic_name.lower() and "realtek" in mic_name.lower():
+        if "microphone" in mic_name.lower() and "speakers" not in mic_name.lower():
             mic_index = i
             break
     
-    # If no specific mic found, use the default
-    if mic_index is None and len(mic_list) > 0:
-        mic_index = 1  # Often the second microphone is better than the first
+    # If no microphone found, use default
+    if mic_index is None:
+        mic_index = None  # Use default microphone
     
-    print(f"Using microphone: {mic_list[mic_index] if mic_index < len(mic_list) else 'Default'}")
+    print(f"Using microphone: {mic_list[mic_index] if mic_index is not None and mic_index < len(mic_list) else 'Default'}")
     
     while not shutdown_flag:
         try:
@@ -156,6 +147,9 @@ def voice_listener(voice_queue):
                 print("Voice listener ready...")
                 
                 while not shutdown_flag:
+                    if processing_flag:
+                        time.sleep(0.1)  # Skip listening when processing
+                        continue
                     try:
                         print("🎤 Listening for voice command...")
                         # Listen for longer to capture complete sentences
@@ -163,10 +157,12 @@ def voice_listener(voice_queue):
                         print("🔊 Audio captured, recognizing...")
                         text = recognizer.recognize_google(audio)
                         print(f"✅ Recognized: '{text}'")
-                        if len(text.split()) > 0:  # Any speech with words
+                        if len(text.split()) > 0 and not processing_flag:  # Check processing_flag again
                             print(f"Voice: {text}")
                             voice_queue.put(text)
                             print(f"📤 Command queued: '{text}'")
+                            # Wait briefly to avoid multiple captures
+                            time.sleep(0.5)
                     except sr.WaitTimeoutError:
                         continue
                     except sr.UnknownValueError:
@@ -180,6 +176,9 @@ def voice_listener(voice_queue):
                         continue
         except Exception as e:
             print(f"❌ Microphone error: {e}")
+            if mic_index is not None:
+                print("Trying default microphone next time")
+                mic_index = None
             time.sleep(2)  # Wait before retrying
 
 def is_command(text):
@@ -223,8 +222,10 @@ def is_command(text):
 
 def main():
     """Main loop for DIY help system with continuous camera feed."""
-    print("DIY Camera Helper started. Camera feed will show continuously.")
-    speak("DIY Camera Helper ready. Ask me any question about what you see.")
+    global processing_flag  # Access global processing flag
+    
+    print("DIY Camera Helper started. Your personal AI vision assistant.")
+    speak("Hey! I'm your AI assistant. Just ask me anything about what I see.")
 
     # Try to initialize camera
     cap = cv2.VideoCapture(0)
@@ -236,7 +237,7 @@ def main():
         if ret:
             camera_available = True
             print("✅ Camera initialized successfully")
-            speak("Camera ready")
+            speak("Camera's ready to go!")
         else:
             print("⚠️ Camera opened but cannot capture frames")
             cap.release()
@@ -245,7 +246,7 @@ def main():
     
     if not camera_available:
         print("🔄 Starting in TEXT-ONLY mode (no camera)")
-        speak("Camera not available. Starting in text-only mode. Say help me for assistance.")
+        speak("No camera found, but I can still help you out. Just describe what you need!")
         # Continue without camera
         cap = None
 
@@ -258,6 +259,7 @@ def main():
     current_frame = None
     camera_error_count = 0
     processing_command = False  # Flag to indicate when processing a command
+    last_process_time = 0  # For real-time processing
 
     while True:
         if camera_available and cap is not None:
@@ -274,6 +276,32 @@ def main():
                 
                 cv2.imshow('Camera Feed - Say "help me" for AI assistance', frame)
                 current_frame = frame
+                
+                # Real-time processing every 15 seconds
+                if not processing_command and not processing_flag and time.time() - last_process_time > 15:
+                    print("🔄 Starting real-time analysis...")
+                    processing_command = True
+                    processing_flag = True
+                    
+                    # Process the frame
+                    frame_rgb = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(frame_rgb)
+                    img.save(f"images/real_time_{int(time.time())}.png")
+                    img = img.resize((256, 256))
+                    img_b64 = encode_image(img)
+                    
+                    real_time_query = "Describe what you see in 2-3 short sentences, as if casually chatting with a friend."
+                    answer = ask_ai(img_b64, real_time_query)
+                    answer = answer.strip().replace('\n', ' ').replace('  ', ' ')
+                    print(f"🤖 Real-time AI RESPONSE: {answer}")
+                    
+                    # Speak the response
+                    speak(answer)
+                    
+                    processing_command = False
+                    processing_flag = False
+                    last_process_time = time.time()
+                    print("✅ Real-time analysis complete.")
             else:
                 camera_error_count += 1
                 print(f"⚠️ Camera frame grab failed ({camera_error_count}/5)")
@@ -294,6 +322,7 @@ def main():
             text = voice_queue.get_nowait()
             print(f"📥 Processing command: '{text}'")
             processing_command = True  # Set processing flag
+            processing_flag = True  # Set global processing flag to stop voice listening
             
             # Process any recognized speech as a potential question/command
             if text.strip():  # Any non-empty text
@@ -328,18 +357,24 @@ def main():
                     # Clean up response for better speech
                     answer = answer.replace('\n', ' ').replace('  ', ' ')
                     print(f"🤖 AI RESPONSE: {answer}")
-                    speak(answer)  # Speak the response without saving
+                    
+                    # Speak the response
+                    speak(answer)
                     
                     processing_command = False  # Reset processing flag
+                    processing_flag = False  # Reset global processing flag
                     print("✅ Ready for next command. Say 'help me' or ask a question.")
                 else:
                     # Text-only response
                     print("📝 Processing text-only query...")
                     answer = f"I heard: '{text}'. Since camera is not available, I can help with general advice. Please describe what you need help with in more detail."
                     print(f"🤖 AI RESPONSE: {answer}")
-                    speak(answer)  # Speak the response without saving
+                    
+                    # Speak the response
+                    speak(answer)
                     
                     processing_command = False  # Reset processing flag
+                    processing_flag = False  # Reset global processing flag
                     print("✅ Ready for next command. Say 'help me' or ask a question.")
                     
         except queue.Empty:
