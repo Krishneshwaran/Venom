@@ -772,7 +772,18 @@ class ActivityAggregator:
                             story.append(Spacer(1, 6))
                             
                             # Sort entries by timestamp desc and take latest 6
-                            entries_sorted = sorted(entries, key=lambda x: x[0] if x[0] else '', reverse=True)[:6]
+                            # But prioritize entries that have snapshots
+                            entries_with_snapshots = [e for e in entries if e[3] and e[3].strip()]
+                            entries_without_snapshots = [e for e in entries if not (e[3] and e[3].strip())]
+                            
+                            # Take up to 6 entries, prioritizing those with snapshots
+                            entries_sorted = sorted(entries_with_snapshots, key=lambda x: x[0] if x[0] else '', reverse=True)[:6]
+                            
+                            # If we have fewer than 6 with snapshots, fill with recent ones without snapshots
+                            if len(entries_sorted) < 6:
+                                remaining_slots = 6 - len(entries_sorted)
+                                entries_without_sorted = sorted(entries_without_snapshots, key=lambda x: x[0] if x[0] else '', reverse=True)[:remaining_slots]
+                                entries_sorted.extend(entries_without_sorted)
                             
                             # Create 3-column grid of snapshots
                             table_data = []

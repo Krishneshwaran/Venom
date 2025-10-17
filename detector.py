@@ -286,7 +286,8 @@ class ActivityDetector:
                 'bbox': person.bbox,
                 'activity': person_activity,
                 'confidence': person_conf,
-                'nearby_objects': [obj.label for obj in nearby_objects]
+                'nearby_objects': [obj.label for obj in nearby_objects],
+                'face_detected': True  # CRITICAL: Enable per-person snapshot saving
             })
         
         # Build result
