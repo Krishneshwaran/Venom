@@ -49,7 +49,7 @@ recognizer = sr.Recognizer()
 # Listening/tts control globals
 last_interaction_time = 0
 # How long (seconds) to keep listening after activation or last command
-LISTEN_WINDOW = int(os.getenv('LISTEN_WINDOW', '30'))
+LISTEN_WINDOW = int(os.getenv('LISTEN_WINDOW', '20'))
 # Flag to avoid capturing assistant's own speech
 speaking_flag = False
 
@@ -289,7 +289,7 @@ def check_reminders():
                             json.dump(reminders, f, indent=2, ensure_ascii=False)
             
             # Check every 10 seconds
-            time.sleep(30)
+            time.sleep(10)
         except Exception as e:
             print(f"❌ Error in reminder checker: {e}")
             time.sleep(10)
@@ -893,7 +893,7 @@ def main():
     """Main loop for DIY help system with continuous camera feed."""
     global processing_flag, is_listening_active, activation_time, last_interaction_time  # Access global flags
     
-    print("📱 PHONE Camera Helper started. Your personal AI vision assistant.")
+    print("DIY Camera Helper started. Your personal AI vision assistant.")
     # Start in SLEEP MODE - wait for "hey venom"
     is_listening_active = False
     speak("Hey! I'm Venom, your AI assistant. Say 'hey venom' whenever you need me!")
@@ -909,29 +909,26 @@ def main():
     reminder_thread.start()
     print("✅ Reminder system active")
 
-    # PHONE CAMERA SETUP - CHANGE THIS IP TO YOUR PHONE'S IP
-    PHONE_IP = "192.168.1.12"  # ← CHANGE THIS TO YOUR PHONE'S IP FROM IP WEBCAM APP
-    PHONE_STREAM_URL = f"http://{PHONE_IP}:8080/video"
-    
-    print(f"📱 Connecting to phone camera: {PHONE_STREAM_URL}")
-    cap = cv2.VideoCapture(PHONE_STREAM_URL)
+    # Try to initialize camera
+    cap = cv2.VideoCapture(0)
     camera_available = False
     
-    # Test phone camera with retries
-    for attempt in range(5):
-        if cap.isOpened():
-            ret, test_frame = cap.read()
-            if ret and test_frame is not None:
-                camera_available = True
-                print("✅ PHONE Camera initialized successfully")
-                break
-        print(f"🔄 Phone connection attempt {attempt+1}/5...")
-        time.sleep(2)
-        cap = cv2.VideoCapture(PHONE_STREAM_URL)
+    if cap.isOpened():
+        # Test camera by grabbing a frame
+        ret, test_frame = cap.read()
+        if ret:
+            camera_available = True
+            print("✅ Camera initialized successfully")
+        else:
+            print("⚠️ Camera opened but cannot capture frames")
+            cap.release()
+    else:
+        print("❌ Could not open camera. Please check camera permissions and connections.")
     
     if not camera_available:
-        print("❌ Could not connect to phone camera. Please check IP Webcam app.")
-        speak("Phone camera not found, but I can still help you out. Just describe what you need!")
+        print("🔄 Starting in TEXT-ONLY mode (no camera)")
+        speak("No camera found, but I can still help you out. Just describe what you need!")
+        # Continue without camera
         cap = None
     
     # Load owner face if registered
@@ -967,16 +964,16 @@ def main():
                     cv2.putText(frame, "Voice listening paused", (10, 60), 
                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 
-                cv2.imshow('📱 PHONE Camera Feed - Say "hey venom" to activate', frame)
+                cv2.imshow('Camera Feed - Say "hey venom" to activate', frame)
                 current_frame = frame
                 # Removed automatic real-time processing
             else:
                 camera_error_count += 1
-                print(f"⚠️ Phone frame grab failed ({camera_error_count}/5)")
+                print(f"⚠️ Camera frame grab failed ({camera_error_count}/5)")
                 
                 if camera_error_count >= 5:
-                    print("❌ Phone camera failed 5 times. Switching to text-only mode...")
-                    speak("Phone camera error. Switching to text-only mode.")
+                    print("❌ Camera failed 5 times. Switching to text-only mode...")
+                    speak("Camera error. Switching to text-only mode.")
                     camera_available = False
                     if cap:
                         cap.release()
@@ -1013,7 +1010,7 @@ def main():
                         else:
                             answer = "I couldn't register your face. Please try again with better lighting."
                     else:
-                        answer = "Phone camera not available. I can't enable security mode without seeing you."
+                        answer = "Camera not available. I can't enable security mode without seeing you."
                     
                     print(f"🤖 AI RESPONSE: {answer}")
                     save_conversation(text, answer)
@@ -1302,7 +1299,7 @@ def main():
                 else:
                     # Text-only response
                     print("📝 Processing text-only query...")
-                    answer = f"I heard: '{text}'. Since phone camera is not available, I can help with general advice. Please describe what you need help with in more detail."
+                    answer = f"I heard: '{text}'. Since camera is not available, I can help with general advice. Please describe what you need help with in more detail."
                     print(f"🤖 AI RESPONSE: {answer}")
                     
                     # Save conversation to JSON

@@ -433,5 +433,105 @@
     "timestamp": "2025-10-19T13:38:52.963431",
     "question": "கேன் யூ செக் எனி புக் அவைலபில் இன் அமேசான் | can you check any book available in Amazon",
     "response": "மன்னிக்கவும், நான் நேரடியாக அமேசானில் புத்தகங்களைத் தேட முடியாது. உங்களுக்கு ஏதேனும் குறிப்பிட்ட புத்தகம் பற்றி தெரிய வேண்டும் என்றால், நான் தகவல் கொடுக்க முயற்சி செய்யலாம்."
+  },
+  {
+    "timestamp": "2025-10-19T13:50:29.424891",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey there! I can't actually listen to audio files directly, so I wasn't able to hear your temp_phone_audio.wav. Is there anything else I can help with?"
+  },
+  {
+    "timestamp": "2025-10-19T13:50:33.459509",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey! Unfortunately, I can't actually listen to audio files, so I can't tell you what's in \"temp_phone_audio.wav.\" Is there anything else I can help with?"
+  },
+  {
+    "timestamp": "2025-10-19T13:50:38.020608",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey, I see the guy in the brown shirt sitting by the bookshelf! I can't actually listen to the audio file you sent, but what's up?"
+  },
+  {
+    "timestamp": "2025-10-19T13:52:21.379483",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey! Looks like you're taking a selfie inside, I can see a ceiling fan and some pictures on the wall behind you. Hope you're having a good one!"
+  },
+  {
+    "timestamp": "2025-10-19T13:52:29.233000",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey there! I can't actually listen to that audio file you sent. But judging from the pic, it looks like you're just chilling indoors, maybe in your room?"
+  },
+  {
+    "timestamp": "2025-10-19T13:52:35.647447",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey! Cool pic. I can't actually play the audio file, so you'll have to tell me what it was about!"
+  },
+  {
+    "timestamp": "2025-10-19T13:52:39.764432",
+    "question": "FILE:temp_phone_audio.wav",
+    "response": "Hey, looks like you caught yourself in a selfie! I see you, a ceiling fan, and some pictures on the wall behind you."
+  },
+  {
+    "timestamp": "2025-10-19T14:09:15.889992",
+    "question": "இது என்னன்னு தெரியுதா",
+    "response": "ஆமா, அது ஒரு 120W ஃபோன் சார்ஜர் மாதிரி தெரியுது. ரொம்ப ஃபாஸ்டா சார்ஜ் ஆகுமே இது!"
+  },
+  {
+    "timestamp": "2025-10-19T14:09:36.587069",
+    "question": "இதை எந்த போன் சார்ஜ் பண்ணலாம் எந்த போன் இதை வச்சு சார்ஜ் பண்றது",
+    "response": "இது 120W சார்ஜர், சோ Xiaomi, Redmi, POCO மாதிரி ஃபாஸ்ட் சார்ஜிங் சப்போர்ட் பண்ற போன்களை சார்ஜ் பண்ணலாம். மத்த போன்களையும் சார்ஜ் பண்ணலாம், ஆனா அந்த போன் சப்போர்ட் பண்ற வேகத்துல தான் சார்ஜ் ஆகும்."
+  },
+  {
+    "timestamp": "2025-10-19T14:12:14.355173",
+    "question": "கையில் வைத்திருக்க பெண் என்னன்னு கொஞ்சம் பார்த்து சொல்லு இது என்னது ஐயோ",
+    "response": "அவரு கையில ஒரு பேனா இருக்கு. அவ்வளவுதான்!"
+  },
+  {
+    "timestamp": "2025-10-19T14:12:31.694561",
+    "question": "இது என்னது என்ன என்ன பிராண்ட்",
+    "response": "இது ஒரு பேனா அல்லது பென்சில் மாதிரி தெரியுது. ஆனா, பிராண்ட் என்னன்னு இந்த படத்துல சரியா தெரியலப்பா."
+  },
+  {
+    "timestamp": "2025-10-19T14:12:54.117343",
+    "question": "இது என்ன பிராண்ட் பெண்ணு உனக்கு தெரியுதா",
+    "response": "அடடா, இந்த போட்டோல பென் ரொம்ப தெளிவா தெரியலையே. அதோட பிராண்ட் என்னன்னு சொல்ல முடியலப்பா."
+  },
+  {
+    "timestamp": "2025-10-19T14:13:19.933238",
+    "question": "சரி அதை விடு | g17",
+    "response": "சரி விடு, பரவாயில்லை."
+  },
+  {
+    "timestamp": "2025-10-19T14:13:51.311703",
+    "question": "நோ இங்க நீங்க பேசினாங்க கேக்கணும் | Mohini vaishna",
+    "response": "ஓ! நான் பேசறேன். இது மோகினி வைஷ்ணவா? கையில ஒரு மல்டிமீட்டர் வச்சிருக்காங்க போல!"
+  },
+  {
+    "timestamp": "2025-10-19T14:14:11.953580",
+    "question": "ஓகே அப்புறம் வேற என்ன கேட்கிறது",
+    "response": "வேற என்ன? இப்போ என்ன பண்ணிட்டு இருக்கீங்கன்னு கேளுங்க, இல்லன்னா இந்த போட்டோ எங்க எடுத்ததுன்னு கேக்கலாம்."
+  },
+  {
+    "timestamp": "2025-10-19T14:14:50.784284",
+    "question": "இது என்னது",
+    "response": "அது ஒரு வயர் ஸ்டிரிப்பர் (wire stripper). மின்சார வேலைக்கு கம்பிகளை உரிக்கப் பயன்படுத்துவாங்க."
+  },
+  {
+    "timestamp": "2025-10-19T14:15:18.010534",
+    "question": "இது என்னது",
+    "response": "அது ஒரு பல்ஸ் ஆக்சிமீட்டர் மாதிரி இருக்கு. நம்ம உடம்புல ஆக்சிஜன் அளவை அளக்கப் பயன்படுத்துவாங்க."
+  },
+  {
+    "timestamp": "2025-10-19T14:15:46.892622",
+    "question": "வாட்ஸ்அப் வாட்ஸ்அப் | WhatsApp WhatsApp",
+    "response": "Hey! What's that cool little electronic component you're holding? Looks interesting!"
+  },
+  {
+    "timestamp": "2025-10-19T14:16:04.604390",
+    "question": "எலக்ட்ரானிக் கம்பெனி | electronic component in Bugatti",
+    "response": "Hey! The picture just shows you holding an electronic component. It doesn't give any info about an electronic company or a Bugatti, and those memories aren't relevant to what you're asking now."
+  },
+  {
+    "timestamp": "2025-10-19T14:17:42.413138",
+    "question": "இது என்னது வேணும்",
+    "response": "அட, உன் கையில இருக்கறது சின்ன சின்ன நோட்டுப் புத்தகங்கள் மாதிரி தெரியுது. என்ன அது, குட்டி டைரியா?"
   }
 ]
