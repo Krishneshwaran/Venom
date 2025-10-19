@@ -10,3 +10,4 @@ pyaudio==0.2.14
 requests
 face_recognition
 numpy
+pocketsphinx

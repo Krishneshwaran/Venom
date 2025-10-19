@@ -732,9 +732,9 @@ def voice_listener(voice_queue):
         try:
             with sr.Microphone(device_index=mic_index) as source:
                 print("Initializing microphone...")
-                recognizer.adjust_for_ambient_noise(source, duration=2)
+                recognizer.adjust_for_ambient_noise(source, duration=1)
                 recognizer.energy_threshold = 300
-                recognizer.dynamic_energy_threshold = True
+                recognizer.dynamic_energy_threshold = False
                 recognizer.pause_threshold = 1.0  # Increased to detect pauses in speech
                 print("Voice listener ready...")
                 
@@ -809,32 +809,15 @@ def voice_listener(voice_queue):
                         text_lower = text.lower()
 
                         # Accept activation phrases in English and Tamil
-                        activation_phrases = ["hey venom", "hi venom", 'வெனம்', 'ஹே வெனம்', 'ஹாய் வெனம்']
+                        activation_phrases = ["hey venom", "hi venom", "venom", "வனம்"]
                         found_activation = any(phrase in text_lower for phrase in activation_phrases)
                         if found_activation:
                             is_listening_active = True
                             activation_time = time.time()
                             last_interaction_time = activation_time
-                            print("🟢 Venom activated!")
-                            # Remove activation phrases from the recognized text so we can process the remainder
-                            import re
-                            cleaned = text
-                            for phrase in activation_phrases:
-                                try:
-                                    cleaned = re.sub(re.escape(phrase), '', cleaned, flags=re.IGNORECASE)
-                                except Exception:
-                                    cleaned = cleaned.replace(phrase, '')
-                            cleaned = cleaned.strip()
-                            if cleaned:
-                                # treat the remaining text as the actual command
-                                text = cleaned
-                                text_lower = text.lower()
-                                print(f"➡️ Activation phrase removed, processing remainder: '{text}'")
-                                # fall through to processing the command below
-                            else:
-                                # No more content after activation -> wait for next speech
-                                time.sleep(0.2)
-                                continue
+                            print("🟢 Venom activated! 🔴 Listening...")
+                            speak("Yes, I'm listening!")
+                            continue  # NEVER queue activation!
                         
                         # Only queue commands if listening is active
                         if is_listening_active and len(text.split()) > 0 and not processing_flag:
@@ -911,13 +894,8 @@ def main():
     global processing_flag, is_listening_active, activation_time, last_interaction_time  # Access global flags
     
     print("DIY Camera Helper started. Your personal AI vision assistant.")
-    # Start active so Venom is ready immediately on launch
-    is_listening_active = True
-    activation_time = time.time()
-    try:
-        last_interaction_time = activation_time
-    except Exception:
-        pass
+    # Start in SLEEP MODE - wait for "hey venom"
+    is_listening_active = False
     speak("Hey! I'm Venom, your AI assistant. Say 'hey venom' whenever you need me!")
 
     # Initialize reminders.json if it doesn't exist
@@ -941,7 +919,6 @@ def main():
         if ret:
             camera_available = True
             print("✅ Camera initialized successfully")
-            speak("Camera's ready to go!")
         else:
             print("⚠️ Camera opened but cannot capture frames")
             cap.release()
@@ -1021,7 +998,10 @@ def main():
                 if is_leaving_home_command(text):
                     global home_security_active
                     
+                    # Optional: Show visual feedback on camera
                     if camera_available and current_frame is not None:
+                        cv2.putText(current_frame, "VENOM ACTIVE - SPEAK NOW!", (10, 90), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                         # Register/update owner's face
                         if save_owner_face(current_frame):
                             home_security_active = True
