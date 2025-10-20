@@ -12,6 +12,7 @@ from config import Config
 from utils import log_success, log_error, log_info, log_warning
 from tts_module import speak
 from voice_module import start_voice_listener, get_voice_command, set_processing_state, get_voice_listener
+from api_server import get_api_server
 from vision_module import (
     initialize_camera, capture_frame, get_current_frame, 
     save_frame, is_camera_available, get_vision_system
@@ -46,6 +47,9 @@ class VenomAssistant:
         log_info("=" * 50)
         log_info("INITIALIZING VENOM AI ASSISTANT")
         log_info("=" * 50)
+        
+        # Start API server for frontend communication
+        get_api_server()
         
         # Start voice listener
         start_voice_listener()

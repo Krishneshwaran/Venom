@@ -10,8 +10,17 @@ import tempfile
 import subprocess
 import requests
 import pyttsx3
+import platform
 from config import Config
 from utils import ensure_directory, log_success, log_error, log_warning
+
+# Import Windows-compatible audio player
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+    print("⚠️  pygame not available. Install with: pip install pygame")
 
 class TTSEngine:
     """Text-to-Speech Engine with multiple backends"""
@@ -24,17 +33,75 @@ class TTSEngine:
     def _init_pyttsx3(self):
         """Initialize pyttsx3 engine"""
         try:
+            print("🎤 Initializing pyttsx3 TTS engine...")
             self.engine = pyttsx3.init()
             self.engine.setProperty('rate', Config.TTS_RATE)
             self.engine.setProperty('volume', Config.TTS_VOLUME)
             
             voices = self.engine.getProperty('voices')
             if voices:
+                print(f"📢 Available voices: {len(voices)}")
+                for i, voice in enumerate(voices[:3]):  # Show first 3 voices
+                    print(f"  {i}: {voice.name}")
                 self.engine.setProperty('voice', voices[0].id)
-                print(f"Using voice: {voices[0].name}")
+                print(f"✅ Using voice: {voices[0].name}")
+            else:
+                print("⚠️  No voices available!")
         except Exception as e:
             log_error(f"Failed to initialize pyttsx3: {e}")
             self.engine = None
+    
+    def _play_audio_file(self, file_path):
+        """Play audio file using platform-specific method"""
+        try:
+            if platform.system() == 'Darwin':  # macOS
+                subprocess.run(['afplay', file_path], check=True)
+                return True
+            elif platform.system() == 'Windows':
+                if PYGAME_AVAILABLE:
+                    # Use pygame for Windows - with proper initialization
+                    try:
+                        # Initialize pygame mixer with specific settings for better compatibility
+                        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+                        pygame.mixer.music.load(file_path)
+                        pygame.mixer.music.set_volume(1.0)
+                        pygame.mixer.music.play()
+                        
+                        # Wait for playback to finish
+                        while pygame.mixer.music.get_busy():
+                            pygame.time.Clock().tick(10)
+                        
+                        pygame.mixer.music.stop()
+                        pygame.mixer.quit()
+                        time.sleep(0.1)  # Small delay to ensure cleanup
+                        return True
+                    except Exception as e:
+                        log_error(f"Pygame playback error: {e}")
+                        pygame.mixer.quit()
+                        # Try fallback
+                        os.system(f'start /min wmplayer "{file_path}" /close')
+                        time.sleep(3)
+                        return True
+                else:
+                    # Fallback to Windows Media Player command line
+                    os.system(f'start /min wmplayer "{file_path}" /close')
+                    # Wait a bit for playback (not perfect but works)
+                    time.sleep(len(file_path) * 0.05 + 2)
+                    return True
+            else:
+                # Linux - try common players
+                for player in ['mpg123', 'ffplay', 'play']:
+                    try:
+                        subprocess.run([player, file_path], check=True, 
+                                     stdout=subprocess.DEVNULL, 
+                                     stderr=subprocess.DEVNULL)
+                        return True
+                    except FileNotFoundError:
+                        continue
+                return False
+        except Exception as e:
+            log_error(f"Audio playback error: {e}")
+            return False
     
     def _speak_elevenlabs(self, text, save_audio=False):
         """Speak using ElevenLabs API"""
@@ -47,12 +114,9 @@ class TTSEngine:
             cache_path = os.path.join(Config.TTS_CACHE_DIR, safe_name)
             
             if os.path.exists(cache_path):
-                try:
-                    subprocess.run(['afplay', cache_path], check=True)
+                if self._play_audio_file(cache_path):
                     log_success("Spoken via ElevenLabs cache")
                     return True
-                except Exception:
-                    pass
             
             # Make API request
             url = f"https://api.elevenlabs.io/v1/text-to-speech/{Config.ELEVENLABS_VOICE_ID}"
@@ -70,20 +134,17 @@ class TTSEngine:
             
             resp = requests.post(url, headers=headers, json=payload, timeout=15)
             if resp.status_code == 200:
-                write_path = cache_path if save_audio else None
+                # Save to cache
+                with open(cache_path, 'wb') as f:
+                    f.write(resp.content)
                 
-                if write_path:
-                    with open(write_path, 'wb') as f:
-                        f.write(resp.content)
-                    subprocess.run(['afplay', write_path], check=True)
-                    log_success("Spoken via ElevenLabs (cached)")
+                # Play the audio
+                if self._play_audio_file(cache_path):
+                    log_success("Spoken via ElevenLabs")
+                    return True
                 else:
-                    with tempfile.NamedTemporaryFile(delete=True, suffix='.mp3') as tmp:
-                        tmp.write(resp.content)
-                        tmp.flush()
-                        subprocess.run(['afplay', tmp.name], check=True)
-                        log_success("Spoken via ElevenLabs")
-                return True
+                    log_warning("Failed to play ElevenLabs audio")
+                    return False
             else:
                 log_warning(f"ElevenLabs TTS failed: {resp.status_code}")
                 return False
@@ -93,6 +154,10 @@ class TTSEngine:
     
     def _speak_macos_say(self, text):
         """Speak using macOS 'say' command"""
+        # Only available on macOS
+        if platform.system() != 'Darwin':
+            return False
+        
         try:
             text_escaped = text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
             subprocess.run(['say', text_escaped], check=True)
@@ -104,15 +169,35 @@ class TTSEngine:
     
     def _speak_pyttsx3(self, text):
         """Speak using pyttsx3 engine"""
-        if not self.engine:
-            return False
-        
         try:
-            self.engine.say(text)
-            self.engine.runAndWait()
-            self.engine.stop()
-            log_success("Audio playback complete (pyttsx3)")
-            return True
+            # Reinitialize engine for each speech on Windows (threading issue workaround)
+            if platform.system() == 'Windows':
+                engine = pyttsx3.init()
+                engine.setProperty('rate', Config.TTS_RATE)
+                engine.setProperty('volume', Config.TTS_VOLUME)
+                
+                # List available voices and use the first one
+                voices = engine.getProperty('voices')
+                if voices:
+                    engine.setProperty('voice', voices[0].id)
+                    print(f"🔊 Using voice: {voices[0].name}")
+                
+                print(f"🔊 Speaking with pyttsx3: {text[:50]}...")
+                engine.say(text)
+                engine.runAndWait()
+                engine.stop()
+                log_success("Audio playback complete (pyttsx3)")
+                return True
+            else:
+                # Use existing engine on non-Windows systems
+                if not self.engine:
+                    return False
+                
+                self.engine.say(text)
+                self.engine.runAndWait()
+                self.engine.stop()
+                log_success("Audio playback complete (pyttsx3)")
+                return True
         except Exception as e:
             log_error(f"Failed to speak with pyttsx3: {e}")
             return False

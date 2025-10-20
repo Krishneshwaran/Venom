@@ -11,6 +11,15 @@ from config import Config
 from tts_module import speak, is_speaking
 from utils import log_success, log_error, log_warning, log_info
 
+# Import API server for frontend communication
+try:
+    from api_server import update_state
+    API_AVAILABLE = True
+except ImportError:
+    API_AVAILABLE = False
+    def update_state(*args, **kwargs):
+        pass  # No-op if API not available
+
 class VoiceListener:
     """Voice recognition and command processing"""
     
@@ -30,21 +39,8 @@ class VoiceListener:
     
     def _find_microphone(self):
         """Find the best available microphone"""
-        mic_list = sr.Microphone.list_microphone_names()
-        print(f"Available microphones: {mic_list}")
-        
-        mic_index = None
-        for i, mic_name in enumerate(mic_list):
-            if "microphone" in mic_name.lower() and "speakers" not in mic_name.lower():
-                mic_index = i
-                break
-        
-        if mic_index is not None and mic_index < len(mic_list):
-            print(f"Using microphone: {mic_list[mic_index]}")
-        else:
-            print("Using default microphone")
-        
-        return mic_index
+        print("Using default microphone")
+        return None
     
     def _recognize_speech(self, audio):
         """Recognize speech in multiple languages"""
@@ -123,6 +119,9 @@ class VoiceListener:
                         if self.is_listening_active and time.time() - self.last_interaction_time > Config.LISTEN_WINDOW:
                             self.is_listening_active = False
                             print(f"⏰ Listening window closed after {Config.LISTEN_WINDOW}s. Say 'hey venom' to activate again.")
+                            
+                            # Notify frontend - eyes closed
+                            update_state(is_active=False, is_listening=False)
                         
                         try:
                             status = "🎤 Listening..." if self.is_listening_active else "💤 Waiting for 'hey venom'..."
@@ -144,6 +143,10 @@ class VoiceListener:
                                 self.activation_time = time.time()
                                 self.last_interaction_time = self.activation_time
                                 print("🟢 Venom activated! 🔴 Listening...")
+                                
+                                # Notify frontend - eyes open
+                                update_state(is_active=True, is_listening=True)
+                                
                                 speak("Yes, I'm listening!")
                                 continue
                             
