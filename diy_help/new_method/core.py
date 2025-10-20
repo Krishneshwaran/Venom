@@ -69,7 +69,7 @@ class VenomAssistant:
             speak("No camera found, but I can still help you out. Just describe what you need!")
         
         log_success("Venom AI Assistant initialized successfully!")
-        speak("Say 'dei venom' unnaku venumdra appo")
+        speak("ஹே வெணோம், செயல்படுத்த சொல்லுங்க.")
         
         return camera_init
     

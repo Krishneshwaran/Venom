@@ -54,7 +54,7 @@ class AIEngine:
             image = Image.open(io.BytesIO(image_data))
             
             # Build prompt with memory context
-            full_prompt = f"{query}{memory_context}. Keep your response short, natural, and conversational - like talking to a friend. Don't be rude and always respond in tamil language Maximum 2-3 sentences."
+            full_prompt = f"{query}{memory_context}. உன் பதில் சுருக்கமாகவும் இயல்பாகவும் இருக்கட்டும் — நண்பரிடம் பேசுற மாதிரி. மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 2-3 வாக்கியங்கள்)."
             
             log_info(f"Sending request with image size: {len(image_base64)} characters")
             
