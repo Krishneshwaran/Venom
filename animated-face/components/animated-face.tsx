@@ -25,9 +25,12 @@ export default function AnimatedFace() {
 
   // Poll API for Venom state
   useEffect(() => {
+    // Use environment variable or fallback to localhost
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+    
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/state')
+        const response = await fetch(`${apiUrl}/api/state`)
         if (response.ok) {
           const state: VenomState = await response.json()
           setVenomState(state)
