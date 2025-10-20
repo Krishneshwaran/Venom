@@ -1,13 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // Enable static export for Capacitor
+  // Removed output: 'export' - we need server-side API routes for MongoDB
   typescript: {
     ignoreBuildErrors: true,
   },
   images: {
     unoptimized: true,
   },
-  trailingSlash: true, // Required for static export
 }
 
 export default nextConfig

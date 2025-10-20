@@ -54,7 +54,7 @@ class AIEngine:
             image = Image.open(io.BytesIO(image_data))
             
             # Build prompt with memory context
-            full_prompt = f"{query}{memory_context}. Keep your response short, natural, and conversational - like talking to a friend. Maximum 2-3 sentences."
+            full_prompt = f"{query}{memory_context}. Keep your response short, natural, and conversational - like talking to a friend. Don't be rude and always respond in tamil language Maximum 2-3 sentences."
             
             log_info(f"Sending request with image size: {len(image_base64)} characters")
             

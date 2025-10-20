@@ -14,3 +14,4 @@ pocketsphinx
 flask
 flask-cors
 pygame
+pymongo

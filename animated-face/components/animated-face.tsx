@@ -23,23 +23,23 @@ export default function AnimatedFace() {
     timestamp: 0
   })
 
-  // Poll API for Venom state
+  // Poll Next.js API route which fetches from MongoDB
   useEffect(() => {
-    // Use environment variable or fallback to localhost
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-    
-    const pollInterval = setInterval(async () => {
+    const fetchState = async () => {
       try {
-        const response = await fetch(`${apiUrl}/api/state`)
+        const response = await fetch('/api/state')
         if (response.ok) {
           const state: VenomState = await response.json()
           setVenomState(state)
-          setEyesOpen(state.is_active) // Eyes open when Venom is active
+          setEyesOpen(state.is_active)
         }
       } catch (error) {
         console.error('Error fetching Venom state:', error)
       }
-    }, 500) // Poll every 500ms
+    }
+    
+    const pollInterval = setInterval(fetchState, 500) // Poll every 500ms
+    fetchState() // Initial fetch
 
     return () => clearInterval(pollInterval)
   }, [])
