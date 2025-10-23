@@ -53,8 +53,17 @@ class AIEngine:
             image_data = base64.b64decode(image_base64)
             image = Image.open(io.BytesIO(image_data))
             
-            # Build prompt with memory context
-            full_prompt = f"{query}{memory_context}. உன் பதில் சுருக்கமாகவும் இயல்பாகவும் இருக்கட்டும் — நண்பரிடம் பேசுற மாதிரி. மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 2-3 வாக்கியங்கள்)."
+            # Get conversation history
+            from conversation_module import get_conversation_history
+            history = get_conversation_history(limit=5)  # Last 5 conversations
+            history_text = ""
+            if history:
+                history_text = "\n\nRecent conversation history:\n"
+                for conv in history:
+                    history_text += f"User: {conv['question']}\nYou: {conv['response']}\n"
+            
+            # Build prompt with memory context and conversation history
+            full_prompt = f"{query}{memory_context}{history_text}. உன் பதில் சுருக்கமாகவும் இயல்பாகவும் இருக்கட்டும் — நண்பரிடம் பேசுற மாதிரி. மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 2-3 வாக்கியங்கள்).பயனர் எப்போதும் கேள்வி கேட்டால், முதலில் பழைய உரையாடல் வரலாற்றைச் சரிபார்த்து, அதில் உள்ள தொடர்புடைய தகவல்களைப் பார்த்து பதில் தயாரிக்கவும்."
             
             log_info(f"Sending request with image size: {len(image_base64)} characters")
             
@@ -89,7 +98,16 @@ class AIEngine:
             if not self.client:
                 return "AI client not initialized. Please check API key."
             
-            full_prompt = f"{query}{memory_context}. Keep your response short and conversational."
+            # Get conversation history
+            from conversation_module import get_conversation_history
+            history = get_conversation_history(limit=5)  # Last 5 conversations
+            history_text = ""
+            if history:
+                history_text = "\n\nRecent conversation history:\n"
+                for conv in history:
+                    history_text += f"User: {conv['question']}\nYou: {conv['response']}\n"
+            
+            full_prompt = f"{query}{memory_context}{history_text}. Keep your response short and conversational."
             
             response = self.client.models.generate_content(
                 model="gemini-2.5-flash",
