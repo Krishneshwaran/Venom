@@ -4,10 +4,6 @@ import { useEffect, useState } from "react"
 
 interface VenomState {
   is_active: boolean
-  is_listening: boolean
-  is_speaking: boolean
-  last_command: string
-  timestamp: number
 }
 
 export default function AnimatedFace() {
@@ -16,11 +12,7 @@ export default function AnimatedFace() {
   const [isLoading, setIsLoading] = useState(false)
   const [eyesOpen, setEyesOpen] = useState(false) // Start with eyes closed
   const [venomState, setVenomState] = useState<VenomState>({
-    is_active: false,
-    is_listening: false,
-    is_speaking: false,
-    last_command: "",
-    timestamp: 0
+    is_active: false
   })
 
   // Poll Next.js API route which fetches from MongoDB
@@ -162,11 +154,8 @@ export default function AnimatedFace() {
             <span className="text-gray-400">💤 Waiting for activation...</span>
           )}
         </p>
-        {venomState.last_command && (
-          <p className="text-sm text-gray-500 italic">Last: "{venomState.last_command}"</p>
-        )}
         <div className="mt-4 text-xs text-gray-400">
-          Say "hey venom" to activate
+          Press SPACE or C to activate
         </div>
       </div>
     </div>

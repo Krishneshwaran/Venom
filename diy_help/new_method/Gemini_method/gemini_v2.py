@@ -60,10 +60,14 @@ class GeminiLiveChat:
             return
 
         try:
-            # Update or insert the state document
+            # Update or insert the state document with only is_active
+            state_data = {
+                "is_active": is_active
+            }
+
             self.state_collection.update_one(
                 {},  # Match any document (or first one)
-                {"$set": {"is_active": is_active, "updated_at": datetime.now()}},
+                {"$set": state_data},
                 upsert=True  # Create if doesn't exist
             )
             status = "active" if is_active else "inactive"
