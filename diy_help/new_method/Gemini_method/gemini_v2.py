@@ -17,17 +17,59 @@ from pydub import AudioSegment
 from pydub.playback import play as play_audio
 import json
 from datetime import datetime
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 
 
 
 class GeminiLiveChat:
-    def __init__(self, api_key):
+    def __init__(self, api_key, mongo_uri=None):
         self.client = genai.Client(api_key=api_key)
         self.camera = cv2.VideoCapture(0)
         self.recognizer = sr.Recognizer()
         self.audio = pyaudio.PyAudio()
         self.is_recording = False
         self.audio_frames = []
+
+        # MongoDB setup
+        self.mongo_client = None
+        self.db = None
+        self.state_collection = None
+        if mongo_uri:
+            self._setup_mongodb(mongo_uri)
+
+    def _setup_mongodb(self, mongo_uri):
+        """Initialize MongoDB connection"""
+        try:
+            self.mongo_client = MongoClient(mongo_uri)
+            # Test connection
+            self.mongo_client.admin.command('ping')
+            self.db = self.mongo_client['venom']
+            self.state_collection = self.db['state']
+            print("✅ Connected to MongoDB Atlas")
+            # Initialize state as inactive
+            self._update_state(is_active=False)
+        except ConnectionFailure as e:
+            print(f"❌ Failed to connect to MongoDB: {e}")
+        except Exception as e:
+            print(f"❌ MongoDB setup error: {e}")
+
+    def _update_state(self, is_active):
+        """Update the is_active state in MongoDB"""
+        if self.state_collection is None:
+            return
+
+        try:
+            # Update or insert the state document
+            self.state_collection.update_one(
+                {},  # Match any document (or first one)
+                {"$set": {"is_active": is_active, "updated_at": datetime.now()}},
+                upsert=True  # Create if doesn't exist
+            )
+            status = "active" if is_active else "inactive"
+            print(f"✅ MongoDB state updated: {status}")
+        except Exception as e:
+            print(f"❌ Failed to update MongoDB state: {e}")
 
     def capture_frame(self):
         ret, frame = self.camera.read()
@@ -325,6 +367,9 @@ class GeminiLiveChat:
                 break
 
             elif key == ord(' '):
+                # Set MongoDB state to active when SPACE is pressed
+                self._update_state(is_active=True)
+
                 frame_buffer = self.capture_frame()
                 if frame_buffer is None:
                     print("❌ Failed to capture frame")
@@ -352,6 +397,9 @@ class GeminiLiveChat:
                         self._speak_pyttsx3(response)
 
             elif key == ord('c'):
+                # Set MongoDB state to active when 'c' is pressed
+                self._update_state(is_active=True)
+
                 frame_buffer = self.capture_frame()
                 if frame_buffer is None:
                     print("❌ Failed to capture frame")
@@ -381,16 +429,26 @@ class GeminiLiveChat:
         self.cleanup()
 
     def cleanup(self):
+        # Set MongoDB state to inactive before cleanup
+        self._update_state(is_active=False)
+
         self.camera.release()
         cv2.destroyAllWindows()
         self.audio.terminate()
+
+        # Close MongoDB connection
+        if self.mongo_client:
+            self.mongo_client.close()
+            print("✅ MongoDB connection closed")
+
         print("✅ Resources cleaned up")
 
 
 if __name__ == "__main__":
     gemini_api_key = "AIzaSyCR-twDtb6rlgfFA66E76VJlq2eGJzGNMc"
     eleven_api_key = "sk_407c22ae03988e1b1201c291358a1ed05dac792258acd03a"
+    mongo_uri = "mongodb+srv://krish:krish@study.po9dv.mongodb.net/"
 
-    chat = GeminiLiveChat(api_key=gemini_api_key)
+    chat = GeminiLiveChat(api_key=gemini_api_key, mongo_uri=mongo_uri)
     chat.eleven_api_key = eleven_api_key
     chat.voice_video_chat()
