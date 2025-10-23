@@ -97,7 +97,21 @@ class GeminiLiveChat:
             except:
                 pass
         return context_text
-        
+
+    def _get_memory_data(self):
+        """Load memory.json for static knowledge base"""
+        memory_file = "memory.json"
+        memory_text = ""
+        if os.path.exists(memory_file):
+            try:
+                with open(memory_file, "r", encoding="utf-8") as f:
+                    memory = json.load(f)
+                # Format the memory data as readable text
+                memory_text = json.dumps(memory, ensure_ascii=False, indent=2)
+            except:
+                pass
+        return memory_text
+
 
 
     def send_to_gemini(self, frame_buffer, question):
@@ -110,7 +124,7 @@ class GeminiLiveChat:
 
             system_prompt = (
                     "உன் பதில் சுருக்கமாகவும் இயல்பாகவும் இருக்கட்டும் — நண்பரிடம் பேசுற மாதிரி. "
-                    "மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 2-3 வாக்கியங்கள்). "
+                    "மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 5-6 வாக்கியங்கள்). "
                     "குறிப்பாக 'நெய்பகம் இருக்கா?', 'அது எங்கு வச்சது என்று தெரியுமா?' போன்ற கேள்விகள் வந்தால் மட்டும் "
                     "பழைய தொடர்புகளைப் பார்த்து பதில் தயாரிக்கவும்.\n\n"
                 f"{conversation_context}"
@@ -141,10 +155,26 @@ class GeminiLiveChat:
         print(f"\n📤 Sending to Gemini (no history): '{question}'")
 
         try:
+            # Load memory data for reference when needed
+            memory_data = self._get_memory_data()
+
             system_prompt = (
                 "உன் பதில் சுருக்கமாகவும் இயல்பாகவும் இருக்கட்டும் — நண்பரிடம் பேசுற மாதிரி. "
-                "மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 2-3 வாக்கியங்கள்)."
+                "மரியாதையா பேசணும், எப்போதும் தமிழிலேயே பதில் சொல்லணும் (அதிகபட்சம் 5-6 வாக்கியங்கள்). "
+                "\n\n**முக்கிய வழிமுறைகள்:**\n"
+                "1. யூசர் Vijay TV நிகழ்ச்சி, Pitch It On நிகழ்ச்சி, நிகழ்ச்சியில் பங்கேற்பது பற்றி, "
+                "எதற்காக பங்கேற்க வேண்டும், நிகழ்ச்சியின் விவரங்கள் போன்ற கேள்விகள் கேட்டா — "
+                "கீழே உள்ள மெமரி டேட்டாவை பார்த்து தெளிவாக பதில் சொல்லணும்.\n"
+                "2. யூசர் 'பக்கத்துல இருக்குற கடை', 'சுற்றுலா இடங்கள்', 'அருகில் என்ன இருக்கு' கேட்டா — "
+                "இணையத்திலிருந்து தேடி உடனே சொல்லணும்.\n"
+                "3. யூசர் ஊர்ல இருந்து இன்னொரு ஊருக்கு போக எவ்வளவு நேரம் ஆகும், ஆட்டோ/கார் கட்டணம் என்ன கேட்டா — "
+                "இணையத்திலிருந்து சரியான நேரமும் விலையும் தேடி தமிழில் சொல்லணும். மறுத்துச் சொல்லக்கூடாது.\n"
+                "4. எப்பவும் உதவியா இருக்கணும், 'தெரியாது' 'தேடி சொல்றேன்' மாதிரி பதில் தர கூடாது.\n\n"
+                "**மெமரி டேட்டா (நிகழ்ச்சி தகவல்களுக்காக):**\n"
+                f"{memory_data}\n"
             )
+
+
 
             response = self.client.models.generate_content(
                 model="gemini-2.0-flash-exp",
